@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trade Book Application</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            border-radius: 5px;
+        }
+        h1 {
+            color: #333;
+        }
+        .dashboard {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .card {
+            background-color: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .profit {
+            color: green;
+        }
+        .loss {
+            color: red;
+        }
+        button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            display: inline-block;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        #tradeForm {
+            display: none;
+        }
+        #tradeHistory {
+            margin-top: 20px;
+        }
+        .trade-item {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Trade Book</h1>
+        
+        <div class="dashboard">
+            <div class="card">
+                <h2>Total Profit/Loss</h2>
+                <p id="totalProfitLoss">$0.00</p>
+            </div>
+            <div class="card">
+                <h2>Trade History</h2>
+                <canvas id="tradeChart"></canvas>
+            </div>
+        </div>
+
+        <button id="newTradeBtn">New Trade</button>
+
+        <div id="tradeForm" class="card">
+            <h2>Add New Trade</h2>
+            <select id="tradeType">
+                <option value="profit">Profit</option>
+                <option value="loss">Loss</option>
+            </select>
+            <input type="number" id="amount" placeholder="Amount">
+            <select id="orderType">
+                <option value="intraday">Intraday</option>
+                <option value="delivery">Delivery</option>
+            </select>
+            <input type="text" id="stock" placeholder="Stock">
+            <input type="number" id="quantity" placeholder="Quantity">
+            <input type="number" id="entryPrice" placeholder="Entry Price">
+            <input type="number" id="exitPrice" placeholder="Exit Price">
+            <button id="addTradeBtn">Add Trade</button>
+        </div>
+
+        <div class="card">
+            <h2>Filter Trades</h2>
+            <input type="date" id="dateFilter">
+        </div>
+
+        <div id="tradeHistory"></div>
+    </div>
+
+    <script>
+        let trades = [];
+        let chart;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const newTradeBtn = document.getElementById('newTradeBtn');
+            const tradeForm = document.getElementById('tradeForm');
+            const addTradeBtn = document.getElementById('addTradeBtn');
+            const dateFilter = document.getElementById('dateFilter');
+
+            newTradeBtn.addEventListener('click', () => {
+                tradeForm.style.display = tradeForm.style.display === 'none' ? 'block' : 'none';
+            });
+
+            addTradeBtn.addEventListener('click', addTrade);
+            dateFilter.addEventListener('change', filterTrades);
+
+            initChart();
+        });
+
+        function addTrade() {
+            const trade = {
+                date: new Date().toISOString().split('T')[0],
+                type: document.getElementById('tradeType').value,
+                amount: parseFloat(document.getElementById('amount').value),
+                orderType: document.getElementById('orderType').value,
+                stock: document.getElementById('stock').value,
+                quantity: parseInt(document.getElementById('quantity').value),
+                entryPrice: parseFloat(document.getElementById('entryPrice').value),
+                exitPrice: parseFloat(document.getElementById('exitPrice').value)
+            };
+
+            trades.push(trade);
+            updateDashboard();
+            displayTrades();
+            document.getElementById('tradeForm').style.display = 'none';
+        }
+
+        function updateDashboard() {
+            const totalProfitLoss = trades.reduce((acc, trade) => {
+                return acc + (trade.type === 'profit' ? trade.amount : -trade.amount);
+            }, 0);
+
+            document.getElementById('totalProfitLoss').textContent = `$${totalProfitLoss.toFixed(2)}`;
+            document.getElementById('totalProfitLoss').className = totalProfitLoss >= 0 ? 'profit' : 'loss';
+
+            updateChart();
+        }
+
+        function displayTrades() {
+            const tradeHistory = document.getElementById('tradeHistory');
+            tradeHistory.innerHTML = '';
+
+            trades.forEach(trade => {
+                const tradeElement = document.createElement('div');
+                tradeElement.className = 'trade-item';
+                tradeElement.innerHTML = `
+                    <p><strong>Date:</strong> ${trade.date}</p>
+                    <p><strong>Type:</strong> ${trade.type}</p>
+                    <p><strong>Amount:</strong> $${trade.amount.toFixed(2)}</p>
+                    <p><strong>Order Type:</strong> ${trade.orderType}</p>
+                    <p><strong>Stock:</strong> ${trade.stock}</p>
+                    <p><strong>Quantity:</strong> ${trade.quantity}</p>
+                    <p><strong>Entry Price:</strong> $${trade.entryPrice.toFixed(2)}</p>
+                    <p><strong>Exit Price:</strong> $${trade.exitPrice.toFixed(2)}</p>
+                `;
+                tradeHistory.appendChild(tradeElement);
+            });
+        }
+
+        function filterTrades() {
+            const selectedDate = document.getElementById('dateFilter').value;
+            const filteredTrades = trades.filter(trade => trade.date === selectedDate);
+            displayFilteredTrades(filteredTrades);
+        }
+
+        function displayFilteredTrades(filteredTrades) {
+            const tradeHistory = document.getElementById('tradeHistory');
+            tradeHistory.innerHTML = '';
+
+            filteredTrades.forEach(trade => {
+                const tradeElement = document.createElement('div');
+                tradeElement.className = 'trade-item';
+                tradeElement.innerHTML = `
+                    <p><strong>Type:</strong> ${trade.type}</p>
+                    <p><strong>Amount:</strong> $${trade.amount.toFixed(2)}</p>
+                    <p><strong>Order Type:</strong> ${trade.orderType}</p>
+                    <p><strong>Stock:</strong> ${trade.stock}</p>
+                    <p><strong>Quantity:</strong> ${trade.quantity}</p>
+                    <p><strong>Entry Price:</strong> $${trade.entryPrice.toFixed(2)}</p>
+                    <p><strong>Exit Price:</strong> $${trade.exitPrice.toFixed(2)}</p>
+                `;
+                tradeHistory.appendChild(tradeElement);
+            });
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('tradeChart').getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Profit/Loss',
+                        data: [],
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart() {
+            const chartData = trades.reduce((acc, trade) => {
+                const date = trade.date;
+                const amount = trade.type === 'profit' ? trade.amount : -trade.amount;
+                const existingEntry = acc.find(entry => entry.date === date);
+                if (existingEntry) {
+                    existingEntry.amount += amount;
+                } else {
+                    acc.push({ date, amount });
+                }
+                return acc;
+            }, []);
+
+            chart.data.labels = chartData.map(entry => entry.date);
+            chart.data.datasets[0].data = chartData.map(entry => entry.amount);
+            chart.update();
+        }
+    </script>
+</body>
+</html>
